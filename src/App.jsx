@@ -3,9 +3,9 @@ import { useState, useCallback } from "react";
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 // Paste your keys here before running
 const CONFIG = {
-  SPOTIFY_CLIENT_ID: "YOUR_SPOTIFY_CLIENT_ID",
-  TICKETMASTER_API_KEY: "YOUR_TICKETMASTER_API_KEY",
-  BANDSINTOWN_APP_ID: "YOUR_BANDSINTOWN_APP_ID", // can be any string you choose
+  SPOTIFY_CLIENT_ID: "7f31a8bd5fa14db69a70b82d50f7f2c6",
+  TICKETMASTER_API_KEY: "COW3kdczhvNoaxo2IGqNjJAHpkMD1CEH",
+  BANDSINTOWN_APP_ID: "la-concert-finder",
   SPOTIFY_REDIRECT_URI: window.location.origin + window.location.pathname,
 };
 
