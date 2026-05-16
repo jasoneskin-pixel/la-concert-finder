@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 // Paste your keys here before running
@@ -6,33 +6,58 @@ const CONFIG = {
   SPOTIFY_CLIENT_ID: "7f31a8bd5fa14db69a70b82d50f7f2c6",
   TICKETMASTER_API_KEY: "COW3kdczhvNoaxo2IGqNjJAHpkMD1CEH",
   BANDSINTOWN_APP_ID: "la-concert-finder",
-  SPOTIFY_REDIRECT_URI: window.location.origin + window.location.pathname,
+  SPOTIFY_REDIRECT_URI: "https://la-concert-finder.netlify.app/",
 };
 
 const SPOTIFY_SCOPES = "user-library-read";
 const TM_LA_DMA = "324"; // Ticketmaster DMA for Los Angeles
 
-// ─── SPOTIFY AUTH ─────────────────────────────────────────────────────────────
-function getSpotifyToken() {
-  const hash = window.location.hash;
-  if (hash) {
-    const params = new URLSearchParams(hash.replace("#", "?"));
-    const token = params.get("access_token");
-    if (token) {
-      window.history.replaceState({}, "", window.location.pathname);
-      return token;
-    }
-  }
-  return sessionStorage.getItem("spotify_token");
+// ─── SPOTIFY AUTH (PKCE) ──────────────────────────────────────────────────────
+async function generateCodeVerifier() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode(...array))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-function launchSpotifyAuth() {
+async function generateCodeChallenge(verifier) {
+  const data = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+async function exchangeCodeForToken(code) {
+  const verifier = sessionStorage.getItem("pkce_verifier");
+  if (!verifier) throw new Error("No PKCE verifier — please reconnect Spotify");
+  const res = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: CONFIG.SPOTIFY_REDIRECT_URI,
+      client_id: CONFIG.SPOTIFY_CLIENT_ID,
+      code_verifier: verifier,
+    }),
+  });
+  if (!res.ok) throw new Error("Token exchange failed");
+  const { access_token } = await res.json();
+  sessionStorage.removeItem("pkce_verifier");
+  return access_token;
+}
+
+async function launchSpotifyAuth() {
+  const verifier = await generateCodeVerifier();
+  const challenge = await generateCodeChallenge(verifier);
+  sessionStorage.setItem("pkce_verifier", verifier);
   const params = new URLSearchParams({
     client_id: CONFIG.SPOTIFY_CLIENT_ID,
-    response_type: "token",
+    response_type: "code",
     redirect_uri: CONFIG.SPOTIFY_REDIRECT_URI,
     scope: SPOTIFY_SCOPES,
-    show_dialog: "false",
+    code_challenge_method: "S256",
+    code_challenge: challenge,
   });
   window.location.href = `https://accounts.spotify.com/authorize?${params}`;
 }
@@ -159,11 +184,7 @@ function formatDate(dateStr) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [token, setToken] = useState(() => {
-    const t = getSpotifyToken();
-    if (t) sessionStorage.setItem("spotify_token", t);
-    return t;
-  });
+  const [token, setToken] = useState(() => sessionStorage.getItem("spotify_token"));
   const [stage, setStage] = useState("idle"); // idle | loading | done | error
   const [progress, setProgress] = useState({ current: 0, total: 0, label: "" });
   const [shows, setShows] = useState([]);
@@ -171,14 +192,29 @@ export default function App() {
   const [sortBy, setSortBy] = useState("date");
   const [filterText, setFilterText] = useState("");
 
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("code");
+    if (!code) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    exchangeCodeForToken(code)
+      .then((t) => {
+        sessionStorage.setItem("spotify_token", t);
+        setToken(t);
+      })
+      .catch((e) => {
+        setErrorMsg(e.message);
+        setStage("error");
+      });
+  }, []);
+
   const keysConfigured =
     CONFIG.SPOTIFY_CLIENT_ID !== "YOUR_SPOTIFY_CLIENT_ID" &&
     CONFIG.TICKETMASTER_API_KEY !== "YOUR_TICKETMASTER_API_KEY" &&
     CONFIG.BANDSINTOWN_APP_ID !== "YOUR_BANDSINTOWN_APP_ID";
 
-  const handleConnect = () => {
+  const handleConnect = async () => {
     if (!keysConfigured) return;
-    launchSpotifyAuth();
+    await launchSpotifyAuth();
   };
 
   const handleSearch = useCallback(async () => {
