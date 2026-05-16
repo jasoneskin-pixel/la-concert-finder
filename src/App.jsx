@@ -10,7 +10,6 @@ const CONFIG = {
 };
 
 const SPOTIFY_SCOPES = "user-library-read";
-const TM_LA_DMA = "324"; // Ticketmaster DMA for Los Angeles
 
 // ─── SPOTIFY AUTH (PKCE) ──────────────────────────────────────────────────────
 async function generateCodeVerifier() {
@@ -84,12 +83,12 @@ async function fetchAllSavedArtists(token) {
   return [...artists.values()];
 }
 
-async function fetchTicketmasterShows(artistName) {
+async function fetchTicketmasterShows(artistName, city) {
   try {
     const params = new URLSearchParams({
       apikey: CONFIG.TICKETMASTER_API_KEY,
       keyword: artistName,
-      dmaId: TM_LA_DMA,
+      city,
       classificationName: "music",
       size: "5",
       sort: "date,asc",
@@ -107,7 +106,7 @@ async function fetchTicketmasterShows(artistName) {
       date: e.dates?.start?.localDate || "TBD",
       time: e.dates?.start?.localTime || "",
       venue: e._embedded?.venues?.[0]?.name || "Unknown Venue",
-      city: e._embedded?.venues?.[0]?.city?.name || "LA",
+      city: e._embedded?.venues?.[0]?.city?.name || city,
       url: e.url,
     }));
   } catch {
@@ -115,7 +114,7 @@ async function fetchTicketmasterShows(artistName) {
   }
 }
 
-async function fetchBandsintownShows(artistName) {
+async function fetchBandsintownShows(artistName, city) {
   try {
     const encoded = encodeURIComponent(artistName);
     const res = await fetch(
@@ -124,32 +123,18 @@ async function fetchBandsintownShows(artistName) {
     if (!res.ok) return [];
     const events = await res.json();
     if (!Array.isArray(events)) return [];
-    const laEvents = events.filter((e) => {
-      const region = (e.venue?.region || "").toLowerCase();
-      const city = (e.venue?.city || "").toLowerCase();
-      return (
-        region === "ca" &&
-        (city.includes("los angeles") ||
-          city.includes("hollywood") ||
-          city.includes("west hollywood") ||
-          city.includes("culver city") ||
-          city.includes("santa monica") ||
-          city.includes("burbank") ||
-          city.includes("anaheim") ||
-          city.includes("pomona") ||
-          city.includes("pasadena") ||
-          city.includes("inglewood") ||
-          city.includes("long beach"))
-      );
-    });
-    return laEvents.map((e) => ({
+    const cityLower = city.toLowerCase();
+    const localEvents = events.filter((e) =>
+      (e.venue?.city || "").toLowerCase().includes(cityLower)
+    );
+    return localEvents.map((e) => ({
       source: "Bandsintown",
       artist: artistName,
       name: `${artistName} at ${e.venue?.name}`,
       date: e.datetime?.split("T")[0] || "TBD",
       time: e.datetime?.split("T")[1]?.slice(0, 5) || "",
       venue: e.venue?.name || "Unknown Venue",
-      city: e.venue?.city || "LA",
+      city: e.venue?.city || city,
       url: e.url || e.offers?.[0]?.url || "#",
     }));
   } catch {
@@ -191,6 +176,7 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState("");
   const [sortBy, setSortBy] = useState("date");
   const [filterText, setFilterText] = useState("");
+  const [location, setLocation] = useState("Los Angeles");
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("code");
@@ -223,10 +209,12 @@ export default function App() {
     setShows([]);
     setErrorMsg("");
 
+    const city = location.split(",")[0].trim();
+
     try {
       setProgress({ current: 0, total: 0, label: "Reading your Spotify library…" });
       const artists = await fetchAllSavedArtists(token);
-      setProgress({ current: 0, total: artists.length, label: `Found ${artists.length} artists. Checking concerts…` });
+      setProgress({ current: 0, total: artists.length, label: `Found ${artists.length} artists. Checking concerts in ${city}…` });
 
       const allShows = [];
       const BATCH = 5;
@@ -234,8 +222,8 @@ export default function App() {
         const batch = artists.slice(i, i + BATCH);
         const results = await Promise.all(
           batch.flatMap((a) => [
-            fetchTicketmasterShows(a.name),
-            fetchBandsintownShows(a.name),
+            fetchTicketmasterShows(a.name, city),
+            fetchBandsintownShows(a.name, city),
           ])
         );
         results.forEach((r) => allShows.push(...r));
@@ -257,7 +245,7 @@ export default function App() {
       setErrorMsg(e.message || "Something went wrong.");
       setStage("error");
     }
-  }, [token]);
+  }, [token, location]);
 
   const sorted = [...shows]
     .filter(
@@ -311,8 +299,7 @@ export default function App() {
           position: relative;
           overflow: hidden;
         }
-        .header::before {
-          content: 'LA';
+        .header-watermark {
           position: absolute;
           right: -20px;
           top: -40px;
@@ -321,6 +308,8 @@ export default function App() {
           color: #ffffff06;
           pointer-events: none;
           line-height: 1;
+          text-transform: uppercase;
+          user-select: none;
         }
         .eyebrow {
           font-size: 10px;
@@ -345,6 +334,46 @@ export default function App() {
           max-width: 480px;
           line-height: 1.8;
         }
+
+        /* LOCATION BAR */
+        .location-bar {
+          margin-top: 28px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          max-width: 420px;
+          background: #161616;
+          border: 1px solid var(--border);
+          padding: 10px 16px;
+        }
+        .location-bar:focus-within {
+          border-color: var(--accent);
+        }
+        .location-pin {
+          color: var(--accent);
+          font-size: 14px;
+          flex-shrink: 0;
+          line-height: 1;
+        }
+        .location-label {
+          font-size: 8px;
+          letter-spacing: 0.25em;
+          text-transform: uppercase;
+          color: var(--muted);
+          flex-shrink: 0;
+        }
+        .location-input {
+          background: transparent;
+          border: none;
+          color: var(--text);
+          font-family: 'DM Mono', monospace;
+          font-size: 13px;
+          letter-spacing: 0.05em;
+          padding: 0;
+          width: 100%;
+          outline: none;
+        }
+        .location-input::placeholder { color: var(--muted); }
 
         /* SETUP PANEL */
         .setup-panel {
@@ -676,6 +705,7 @@ export default function App() {
 
         @media (max-width: 700px) {
           .header { padding: 32px 20px 24px; }
+          .location-input { font-size: 18px; }
           .setup-panel, .actions, .progress-wrap,
           .results-header, .shows-list, .col-headers, .error-msg, .empty-state {
             margin-left: 20px;
@@ -692,15 +722,29 @@ export default function App() {
       <div className="app">
         {/* HEADER */}
         <div className="header">
-          <div className="eyebrow">Concert Finder — Los Angeles</div>
+          <div className="header-watermark" aria-hidden="true">
+            {location.split(",")[0].slice(0, 2) || "LA"}
+          </div>
+          <div className="eyebrow">Concert Finder</div>
           <div className="title">
             Your Artists.<br />
-            <span>Live in LA.</span>
+            <span>Live Near You.</span>
           </div>
           <div className="subtitle">
             Connects to your Spotify saved songs, extracts every artist,
             and cross-references Ticketmaster + Bandsintown for upcoming
-            shows in and around Los Angeles.
+            shows near your chosen city.
+          </div>
+          <div className="location-bar">
+            <span className="location-pin">◎</span>
+            <span className="location-label">City</span>
+            <input
+              className="location-input"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Los Angeles"
+              spellCheck={false}
+            />
           </div>
         </div>
 
@@ -769,7 +813,7 @@ export default function App() {
                 onClick={handleSearch}
                 disabled={stage === "loading"}
               >
-                {stage === "loading" ? "Scanning…" : "Find LA Shows"}
+                {stage === "loading" ? "Scanning…" : "Find Shows"}
               </button>
               <button
                 className="btn btn-secondary"
