@@ -603,41 +603,42 @@ export default function App() {
         .show-row:hover { background: #141414; }
         .show-cell {
           padding: 16px 20px;
-          font-size: 11px;
+          font-size: 13px;
           line-height: 1.5;
         }
         .show-cell:first-child { padding-left: 0; }
         .show-date {
           font-family: 'Bebas Neue', sans-serif;
-          font-size: 14px;
+          font-size: 17px;
           letter-spacing: 0.05em;
           color: var(--text);
           line-height: 1.2;
         }
         .show-time {
-          font-size: 9px;
+          font-size: 11px;
           color: var(--muted);
           letter-spacing: 0.1em;
           margin-top: 2px;
         }
         .show-artist {
-          font-size: 13px;
-          font-weight: 400;
+          font-size: 15px;
+          font-weight: 500;
           color: var(--text);
           letter-spacing: 0.03em;
         }
         .show-venue {
           color: var(--muted);
-          font-size: 10px;
+          font-size: 12px;
           letter-spacing: 0.08em;
           margin-top: 3px;
         }
         .show-venue-name {
-          font-size: 11px;
-          color: #888;
+          font-size: 13px;
+          font-weight: 500;
+          color: #aaa;
         }
         .show-city {
-          font-size: 9px;
+          font-size: 11px;
           color: var(--muted);
           letter-spacing: 0.1em;
           margin-top: 2px;
