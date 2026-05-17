@@ -85,11 +85,13 @@ async function fetchAllSavedArtists(token) {
 
 async function fetchTicketmasterShows(artistName, city) {
   try {
+    const today = new Date().toISOString().split("T")[0];
     const params = new URLSearchParams({
       apikey: CONFIG.TICKETMASTER_API_KEY,
       keyword: artistName,
       city,
       classificationName: "music",
+      startDateTime: `${today}T00:00:00Z`,
       size: "5",
       sort: "date,asc",
     });
@@ -116,10 +118,12 @@ async function fetchTicketmasterShows(artistName, city) {
 
 async function fetchSeatGeekShows(artistName, city) {
   try {
+    const today = new Date().toISOString().split("T")[0];
     const params = new URLSearchParams({
       client_id: CONFIG.SEATGEEK_CLIENT_ID,
       q: artistName,
       "venue.city": city,
+      "datetime_local.gte": today,
       type: "concert",
       per_page: "5",
       sort: "datetime_asc",
@@ -236,9 +240,10 @@ export default function App() {
         await new Promise((r) => setTimeout(r, 200));
       }
 
-      const deduped = dedupeShows(allShows).sort(
-        (a, b) => new Date(a.date) - new Date(b.date)
-      );
+      const today = new Date().toISOString().split("T")[0];
+      const deduped = dedupeShows(allShows)
+        .filter((s) => s.date === "TBD" || s.date >= today)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
       setShows(deduped);
       setStage("done");
     } catch (e) {
