@@ -5,7 +5,7 @@ import { useState, useCallback, useEffect } from "react";
 const CONFIG = {
   SPOTIFY_CLIENT_ID: "7f31a8bd5fa14db69a70b82d50f7f2c6",
   TICKETMASTER_API_KEY: "COW3kdczhvNoaxo2IGqNjJAHpkMD1CEH",
-  BANDSINTOWN_APP_ID: "la-concert-finder",
+  SEATGEEK_CLIENT_ID: "YOUR_SEATGEEK_CLIENT_ID",
   SPOTIFY_REDIRECT_URI: "https://la-concert-finder.netlify.app/",
 };
 
@@ -114,28 +114,28 @@ async function fetchTicketmasterShows(artistName, city) {
   }
 }
 
-async function fetchBandsintownShows(artistName, city) {
+async function fetchSeatGeekShows(artistName, city) {
   try {
-    const encoded = encodeURIComponent(artistName);
-    const res = await fetch(
-      `https://rest.bandsintown.com/artists/${encoded}/events?app_id=${CONFIG.BANDSINTOWN_APP_ID}&date=upcoming`
-    );
+    const params = new URLSearchParams({
+      client_id: CONFIG.SEATGEEK_CLIENT_ID,
+      q: artistName,
+      "venue.city": city,
+      type: "concert",
+      per_page: "5",
+      sort: "datetime_asc",
+    });
+    const res = await fetch(`https://api.seatgeek.com/2/events?${params}`);
     if (!res.ok) return [];
-    const events = await res.json();
-    if (!Array.isArray(events)) return [];
-    const cityLower = city.toLowerCase();
-    const localEvents = events.filter((e) =>
-      (e.venue?.city || "").toLowerCase().includes(cityLower)
-    );
-    return localEvents.map((e) => ({
-      source: "Bandsintown",
+    const data = await res.json();
+    return (data.events || []).map((e) => ({
+      source: "SeatGeek",
       artist: artistName,
-      name: `${artistName} at ${e.venue?.name}`,
-      date: e.datetime?.split("T")[0] || "TBD",
-      time: e.datetime?.split("T")[1]?.slice(0, 5) || "",
+      name: e.title,
+      date: e.datetime_local?.split("T")[0] || "TBD",
+      time: e.datetime_local?.split("T")[1]?.slice(0, 5) || "",
       venue: e.venue?.name || "Unknown Venue",
       city: e.venue?.city || city,
-      url: e.url || e.offers?.[0]?.url || "#",
+      url: e.url,
     }));
   } catch {
     return [];
@@ -196,7 +196,7 @@ export default function App() {
   const keysConfigured =
     CONFIG.SPOTIFY_CLIENT_ID !== "YOUR_SPOTIFY_CLIENT_ID" &&
     CONFIG.TICKETMASTER_API_KEY !== "YOUR_TICKETMASTER_API_KEY" &&
-    CONFIG.BANDSINTOWN_APP_ID !== "YOUR_BANDSINTOWN_APP_ID";
+    CONFIG.SEATGEEK_CLIENT_ID !== "YOUR_SEATGEEK_CLIENT_ID";
 
   const handleConnect = async () => {
     if (!keysConfigured) return;
@@ -223,7 +223,7 @@ export default function App() {
         const results = await Promise.all(
           batch.flatMap((a) => [
             fetchTicketmasterShows(a.name, city),
-            fetchBandsintownShows(a.name, city),
+            fetchSeatGeekShows(a.name, city),
           ])
         );
         results.forEach((r) => allShows.push(...r));
@@ -282,7 +282,7 @@ export default function App() {
           --text: #f0f0f0;
           --muted: #555555;
           --tm: #026cdf;
-          --bit: #00a0c9;
+          --sg: #f05537;
         }
 
         body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; }
@@ -646,7 +646,7 @@ export default function App() {
           border: 1px solid;
         }
         .source-tm { color: var(--tm); border-color: var(--tm); }
-        .source-bit { color: var(--bit); border-color: var(--bit); }
+        .source-sg { color: var(--sg); border-color: var(--sg); }
         .ticket-link {
           font-size: 9px;
           letter-spacing: 0.12em;
@@ -732,7 +732,7 @@ export default function App() {
           </div>
           <div className="subtitle">
             Connects to your Spotify saved songs, extracts every artist,
-            and cross-references Ticketmaster + Bandsintown for upcoming
+            and cross-references Ticketmaster + SeatGeek for upcoming
             shows near your chosen city.
           </div>
           <div className="location-bar">
@@ -774,8 +774,10 @@ export default function App() {
             <div className="setup-step">
               <div className="step-num">03</div>
               <div className="step-text">
-                <strong style={{color:"#ddd"}}>Bandsintown</strong> — No approval needed. Just set{" "}
-                <code>BANDSINTOWN_APP_ID</code> to any short string that identifies your app (e.g. <code>my-concert-app</code>).
+                <strong style={{color:"#ddd"}}>SeatGeek</strong> — Register for a free client ID at{" "}
+                <a href="https://seatgeek.com/account/develop" target="_blank" rel="noreferrer">
+                  seatgeek.com/account/develop
+                </a>. Paste into <code>SEATGEEK_CLIENT_ID</code>.
               </div>
             </div>
             <div className="setup-step">
@@ -927,10 +929,10 @@ export default function App() {
                           className={`source-badge ${
                             show.source === "Ticketmaster"
                               ? "source-tm"
-                              : "source-bit"
+                              : "source-sg"
                           }`}
                         >
-                          {show.source === "Ticketmaster" ? "TM" : "BIT"}
+                          {show.source === "Ticketmaster" ? "TM" : "SG"}
                         </span>
                       </div>
                     </div>
