@@ -199,8 +199,7 @@ export default function App() {
 
   const keysConfigured =
     CONFIG.SPOTIFY_CLIENT_ID !== "YOUR_SPOTIFY_CLIENT_ID" &&
-    CONFIG.TICKETMASTER_API_KEY !== "YOUR_TICKETMASTER_API_KEY" &&
-    CONFIG.SEATGEEK_CLIENT_ID !== "YOUR_SEATGEEK_CLIENT_ID";
+    CONFIG.TICKETMASTER_API_KEY !== "YOUR_TICKETMASTER_API_KEY";
 
   const handleConnect = async () => {
     if (!keysConfigured) return;
